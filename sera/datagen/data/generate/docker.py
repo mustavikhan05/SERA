@@ -103,11 +103,13 @@ class TypeScriptProfile(JavaScriptProfile):
     def dockerfile(self) -> str:
         """Generate Dockerfile for TypeScript repos."""
         return f"""FROM node:20-bullseye
-RUN apt update && apt install -y git
+RUN apt update && apt install -y git build-essential python3
 RUN npm install -g pnpm@9
 RUN git clone https://github.com/{self.mirror_name} /testbed
 WORKDIR /testbed
-RUN pnpm install --no-frozen-lockfile || npm install
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+ENV npm_config_sharp_libvips_local_prebuilds=0
+RUN pnpm install --no-frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile || npm install --ignore-scripts || npm install
 """
 
     def log_parser(self, log: str) -> dict[str, str]:
