@@ -1,0 +1,65 @@
+# USAGE: python sera/main.py --config-name specialization_typescript stage=pipeline name=test
+# TypeScript specialization config — adapt repos list as needed
+
+defaults:
+  - sera
+  - _self_
+
+name: specialize_typescript
+
+generate:
+  fns_per_repo: 5000
+  insts_per_fn: 1
+  language: typescript
+  personal_repos:
+    - org_name: colinhacks
+      last_name: zod
+      commits: # Provide exact commits or we auto-scrape equally spaced ones
+      install_cmds:
+        - "pnpm install --frozen-lockfile"
+      test_cmd: "pnpm test"
+      node_version: "20"
+      package_manager: pnpm
+      test_framework: vitest
+      tsc_verify: true
+      top_level_folder:
+        - src
+    - org_name: honojs
+      last_name: hono
+      install_cmds:
+        - "pnpm install --frozen-lockfile"
+      test_cmd: "pnpm test"
+      node_version: "20"
+      package_manager: pnpm
+      test_framework: vitest
+      tsc_verify: true
+      top_level_folder:
+        - src
+    - org_name: vuejs
+      last_name: core
+      install_cmds:
+        - "pnpm install --frozen-lockfile"
+      test_cmd: "pnpm test"
+      node_version: "20"
+      package_manager: pnpm
+      test_framework: vitest
+      tsc_verify: true
+      top_level_folder:
+        - packages
+
+distill:
+  model:
+    name: moonshot/kimi-2.5
+    url: null # <--- FILL IN with Kimi 2.5 API endpoint
+  sweagent_wrapper_config:
+    num_workers: 8
+
+postprocess:
+  tool_call_format: hermes
+  add_think: false
+  add_train_key: true
+  enforce_submit: true
+  reformat_assistant_message: keep_only_think
+
+eval:
+  compare_patch_threshold: 0.5
