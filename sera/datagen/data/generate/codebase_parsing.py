@@ -715,7 +715,7 @@ def _get_adj_list_jelly(repo_path: str,
 
         if not os.path.exists(cg_save_path) or overwrite:
             # Find TypeScript entry files
-            entry_files = _find_ts_entry_files(repo_path, relevant_folders)
+            entry_files = _find_ts_entry_files(".", relevant_folders)
             if not entry_files:
                 logging.error(f"No TypeScript entry files found in {repo_path}")
                 return None
