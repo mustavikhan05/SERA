@@ -99,6 +99,11 @@ class TypeScriptProfile(JavaScriptProfile):
             pass
         return None
 
+    def log_parser(self, log: str) -> dict[str, str]:
+        """Parse vitest/jest test output logs into pass/fail per test."""
+        from swesmith.profiles.javascript import parse_log_vitest
+        return parse_log_vitest(log)
+
     def _get_install_cmd(self, pkg_manager: str) -> str:
         """Return the appropriate install command for a given package manager."""
         cmds = {
