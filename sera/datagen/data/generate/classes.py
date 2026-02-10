@@ -21,7 +21,7 @@ from jinja2 import Template
 from litellm import completion, APIError
 from openai import OpenAI, APIConnectionError, RateLimitError
 
-from sera.constants import SWEBENCH_IMAGES, SWESMITH_IMAGES
+from sera.constants import SWEBENCH_IMAGES, SWESMITH_IMAGES, TS_REPO_IMAGES
 from sera.datagen.data.generate.docker import build_container
 from sera.datagen.data.generate.codebase_parsing import get_adj_list, find_code_folders
 
@@ -60,6 +60,12 @@ class RepositoryInstance:
         print(self.call_graph, self.call_graph.number_of_nodes())
 
     def create_container(self, docker_org: str, gh_mirror_org: str):
+        # Determine runtime version based on language
+        language = self.parent.language
+        if language == "typescript":
+            runtime_version = self.parent.node_version
+        else:
+            runtime_version = self.parent.python_version
         output = build_container(org_dh=docker_org,
                                             org_gh=gh_mirror_org,
                                             gh_owner=self.parent.org_name,
@@ -67,8 +73,8 @@ class RepositoryInstance:
                                             commit=self.base_commit,
                                             install_cmds=self.parent.install_cmds,
                                             test_cmd=self.parent.test_cmd,
-                                            language=self.parent.language,
-                                            python_version=self.parent.python_version,
+                                            language=language,
+                                            python_version=runtime_version,
                                             package_name=self.parent.skip_package_name
                                          )
         return output
@@ -154,9 +160,14 @@ class ExistingRepository(Repository):
             repo_info = SWESMITH_IMAGES.get("/".join([self.org_name, self.last_name]))
             self.image_name = repo_info["image_name"]
             self.base_commit = repo_info["base_commit"]
+        elif self.source and self.source == "ts_repo":
+            # TypeScript repository images
+            repo_info = TS_REPO_IMAGES.get("/".join([self.org_name, self.last_name]))
+            self.image_name = repo_info["image_name"]
+            self.base_commit = repo_info["base_commit"]
         else:
             if not self.image_name or not self.base_commit:
-                raise RuntimeError("If you are not using an existing swesmith or swebench repository, then you must provide an image to use")
+                raise RuntimeError("If you are not using an existing swesmith, swebench, or ts_repo repository, then you must provide an image to use")
         
         self._clone_repo(repo_parent_dir=repo_parent_dir)
         self._create_instances(metadata_dir=metadata_dir, max_folder_depth=max_folder_depth)
@@ -174,12 +185,17 @@ class ExistingRepository(Repository):
 class LocalRepository(Repository):
     """
     Represents new codebases that we want to create an image for and generate data from.
+    Supports both Python and TypeScript repositories.
     """
-    python_version: str
+    python_version: str  # Used when language="python"
+    node_version: str  # Used when language="typescript"
     install_cmds: List[str]
     test_cmd: str
     skip_package_name: List[str]
-    language: str
+    language: str  # "python" or "typescript"
+    package_manager: str  # "pnpm", "npm", or "yarn" (TypeScript only)
+    test_framework: str  # "vitest", "jest", or "mocha" (TypeScript only)
+    tsc_verify: bool  # Whether to run tsc --noEmit (TypeScript only)
     """Set later via mutator"""
     commits: Optional[list[str]] = None
 

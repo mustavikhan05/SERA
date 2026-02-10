@@ -19,6 +19,10 @@ def main(config: GenerateConfig, metadata_dir: str, folder: ExperimentFolder):
                                                     test_cmd=repo.test_cmd,
                                                     skip_package_name=repo.skip_package_name,
                                                     python_version=repo.python_version,
+                                                    node_version=repo.node_version,
+                                                    package_manager=repo.package_manager,
+                                                    test_framework=repo.test_framework,
+                                                    tsc_verify=repo.tsc_verify,
                                                     top_level_folder=repo.top_level_folder,
                                                     overwrite_cg=repo.overwrite_cg,
                                                     language=repo.language)
