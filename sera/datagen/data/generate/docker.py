@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import docker
+import json
 import os
 import pathlib
 import re
@@ -22,6 +23,100 @@ from swesmith.profiles.rust import RustProfile
 from swesmith.profiles.javascript import JavaScriptProfile
 
 
+###############################################################################
+# TypeScript profile — extends JavaScriptProfile with TS-specific tooling
+###############################################################################
+
+@dataclass
+class TypeScriptProfile(JavaScriptProfile):
+    """
+    SWE-smith profile for TypeScript repositories.
+
+    Inherits from JavaScriptProfile (same Node.js runtime) but adds:
+    - TypeScript compilation verification (tsc --noEmit)
+    - pnpm as the preferred package manager (with auto-detection fallback)
+    - Jelly call-graph extractor for function-level analysis
+    - Test framework detection (vitest, jest)
+
+    The Docker image uses node:20-slim as the base and installs pnpm + Jelly
+    globally before running the per-repo install script (install_ts.sh).
+    """
+
+    # Default base image — can be overridden per-repo
+    base_image: str = "node:20-slim"
+
+    # Default install commands for TypeScript repos
+    install_cmds: list[str] = field(default_factory=lambda: [
+        "npm install -g pnpm",
+        "npm install -g @cs-au-dk/jelly",
+    ])
+
+    @property
+    def _install_script(self) -> pathlib.Path:
+        """Path to the TypeScript install script used during image build."""
+        return pathlib.Path(__file__).parent / "install_ts.sh"
+
+    def _detect_package_manager(self, repo_path: str | pathlib.Path) -> str:
+        """
+        Detect the package manager from lockfiles in the repo.
+        Returns one of: 'pnpm', 'yarn', 'npm'.
+        """
+        repo_path = pathlib.Path(repo_path)
+        if (repo_path / "pnpm-lock.yaml").exists():
+            return "pnpm"
+        elif (repo_path / "yarn.lock").exists():
+            return "yarn"
+        return "npm"
+
+    def _detect_test_framework(self, repo_path: str | pathlib.Path) -> Optional[str]:
+        """
+        Detect the test framework from package.json.
+        Returns one of: 'vitest', 'jest', or None.
+        """
+        repo_path = pathlib.Path(repo_path)
+        pkg_json_path = repo_path / "package.json"
+        if not pkg_json_path.exists():
+            return None
+        try:
+            with open(pkg_json_path, "r") as f:
+                pkg = json.load(f)
+            # Check devDependencies and dependencies
+            all_deps = {}
+            all_deps.update(pkg.get("dependencies", {}))
+            all_deps.update(pkg.get("devDependencies", {}))
+            if "vitest" in all_deps:
+                return "vitest"
+            elif "jest" in all_deps:
+                return "jest"
+            # Also check scripts for test framework references
+            scripts = pkg.get("scripts", {})
+            test_script = scripts.get("test", "")
+            if "vitest" in test_script:
+                return "vitest"
+            elif "jest" in test_script:
+                return "jest"
+        except (json.JSONDecodeError, OSError):
+            pass
+        return None
+
+    def _get_install_cmd(self, pkg_manager: str) -> str:
+        """Return the appropriate install command for a given package manager."""
+        cmds = {
+            "pnpm": "pnpm install --frozen-lockfile",
+            "yarn": "yarn install --frozen-lockfile",
+            "npm": "npm ci",
+        }
+        return cmds.get(pkg_manager, "npm ci")
+
+    def _get_test_cmd(self, test_framework: Optional[str]) -> Optional[str]:
+        """Return the appropriate test command for the detected test framework."""
+        if test_framework == "vitest":
+            return "npx vitest run --reporter=verbose"
+        elif test_framework == "jest":
+            return "npx jest --passWithNoTests"
+        return None
+
+
 # Map of language names to their base profile classes
 LANGUAGE_PROFILES = {
     "python": PythonProfile,
@@ -30,6 +125,8 @@ LANGUAGE_PROFILES = {
     "rust": RustProfile,
     "javascript": JavaScriptProfile,
     "js": JavaScriptProfile,
+    "typescript": TypeScriptProfile,
+    "ts": TypeScriptProfile,
 }
 
 @contextlib.contextmanager                                                         
@@ -198,7 +295,7 @@ def build_profile_image(
         else:
             print("Step 1/4: Skipping GitHub mirror creation")
 
-        # Step 2: Generate environment file (Python only)
+        # Step 2: Generate environment file (language-specific)
         if language == "python":
             print("\nStep 2/4: Generating environment YAML file...")
             print("This may take several minutes...")
@@ -237,6 +334,23 @@ def build_profile_image(
                                 if not should_skip:
                                     f.write(line)
                         print(f"✓ Filtered package(s) '{package_name}' from environment file")
+
+        elif language in ("typescript", "ts"):
+            print("\nStep 2/4: Verifying TypeScript install script exists...")
+            install_script = pathlib.Path("./sera/datagen/data/generate/install_ts.sh")
+            if not install_script.exists():
+                return False, f"TypeScript install script not found at {install_script}"
+            print(f"✓ TypeScript install script found: {install_script}")
+            # Set environment variables for the install script
+            if isinstance(profile, TypeScriptProfile):
+                # Pass package manager hint if install_cmds contain one
+                for cmd in (profile.install_cmds or []):
+                    if "pnpm" in cmd:
+                        os.environ['SERA_PKG_MANAGER'] = 'pnpm'
+                        break
+                    elif "yarn" in cmd:
+                        os.environ['SERA_PKG_MANAGER'] = 'yarn'
+                        break
 
         else:
             print("\nStep 2/4: Skipping environment file generation (non-Python repo)")
@@ -298,6 +412,11 @@ def build_container(
         "org_gh": org_gh,
         "python_version": python_version,
     }
+
+    # python_version is only relevant for Python profiles; remove it for others
+    # to avoid passing an unexpected kwarg to create_profile_class
+    if language.lower() not in ("python",):
+        config.pop("python_version", None)
 
     try:
         # Create profile class
