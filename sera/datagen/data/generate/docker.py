@@ -99,6 +99,17 @@ class TypeScriptProfile(JavaScriptProfile):
             pass
         return None
 
+    @property
+    def dockerfile(self) -> str:
+        """Generate Dockerfile for TypeScript repos."""
+        return f"""FROM node:20-bullseye
+RUN apt update && apt install -y git
+RUN npm install -g pnpm@9
+RUN git clone https://github.com/{self.mirror_name} /testbed
+WORKDIR /testbed
+RUN pnpm install --no-frozen-lockfile || npm install
+"""
+
     def log_parser(self, log: str) -> dict[str, str]:
         """Parse vitest/jest test output logs into pass/fail per test."""
         from swesmith.profiles.javascript import parse_log_vitest
