@@ -128,8 +128,10 @@ class NoBugDataset(SyntheticDataset):
         call_graph_nodes = list(set(repo.call_graph)) # Shuffle nodes since its not actually unordered
         random.shuffle(call_graph_nodes)
         print("Total Functions:", len(call_graph_nodes))
+        # Test file patterns to skip (covers both Python and TypeScript conventions)
+        test_patterns = ["tests", "__tests__", ".test.", ".spec.", "test/", "e2e/", "__mocks__"]
         for fn_path in tqdm(call_graph_nodes, desc=repo.get_full_name()):
-            if "tests" in fn_path:
+            if any(pattern in fn_path for pattern in test_patterns):
                 continue
             result = self.process_instance(fn_path=fn_path,
                                            replicas=self.insts_per_fn,

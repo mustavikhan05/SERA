@@ -74,10 +74,12 @@ class RepositoryInstance:
         return output
 
     def set_code_folders(self, depth: int): # Set way to pass these in
-        wildcards = find_code_folders(repo_path=self.parent.repo_path, 
+        language = getattr(self.parent, "language", "python")
+        wildcards = find_code_folders(repo_path=self.parent.repo_path,
                                         repo_last_name=self.parent.last_name,
                                         base_commit=self.base_commit,
-                                        top_level_folder=self.parent.top_level_folder)
+                                        top_level_folder=self.parent.top_level_folder,
+                                        language=language)
         if not wildcards:
             raise RuntimeError("Could not automatically find wildcards. Please pass in a top level code folder.")
         for wildcard in wildcards:
@@ -85,11 +87,14 @@ class RepositoryInstance:
                 self.folders.append(wildcard)
 
     def create_call_graph(self, metadata_dir):
-        adj_list = get_adj_list(repo_path=self.parent.repo_path, 
+        language = getattr(self.parent, "language", "python")
+        adj_list = get_adj_list(repo_path=self.parent.repo_path,
                                 repo_last_name=self.parent.last_name,
                                 base_commit=self.base_commit,
                                 relevant_folders=self.folders,
-                                metadata_dir=metadata_dir, overwrite=self.parent.overwrite_cg)
+                                metadata_dir=metadata_dir,
+                                overwrite=self.parent.overwrite_cg,
+                                language=language)
         if adj_list is None:
             return None
         self.call_graph = nx.DiGraph(adj_list)
