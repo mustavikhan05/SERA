@@ -10,10 +10,10 @@ name: specialize_typescript
 generate:
   fns_per_repo: 5000
   insts_per_fn: 1
-  language: typescript
   personal_repos:
     - org_name: colinhacks
       last_name: zod
+      language: typescript
       commits: # Provide exact commits or we auto-scrape equally spaced ones
       install_cmds:
         - "pnpm install --frozen-lockfile"
@@ -26,6 +26,7 @@ generate:
         - src
     - org_name: honojs
       last_name: hono
+      language: typescript
       install_cmds:
         - "pnpm install --frozen-lockfile"
       test_cmd: "pnpm test"
@@ -37,6 +38,7 @@ generate:
         - src
     - org_name: vuejs
       last_name: core
+      language: typescript
       install_cmds:
         - "pnpm install --frozen-lockfile"
       test_cmd: "pnpm test"
