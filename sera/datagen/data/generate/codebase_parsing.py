@@ -101,6 +101,7 @@ def find_code_folders(repo_path: str, repo_last_name: str, base_commit: str,
 
     Supports both Python and TypeScript project layouts.
     """
+    repo_path = os.path.abspath(repo_path)
     cwd = os.getcwd()
     try:
         os.chdir(repo_path)
@@ -264,26 +265,15 @@ def _find_ts_entry_files(repo_path: str, relevant_folders: List[str]) -> List[st
     """
     entry_files = []
 
-    # First, check for common entry point files at the repo root or src/
-    common_entries = [
-        "src/index.ts", "src/index.tsx", "src/main.ts", "src/main.tsx",
-        "src/app.ts", "src/app.tsx", "index.ts", "index.tsx",
-        "lib/index.ts", "lib/index.tsx",
-    ]
-    for entry in common_entries:
-        full_path = os.path.join(repo_path, entry)
-        if os.path.isfile(full_path):
-            entry_files.append(entry)
-            break  # Use the first match as primary entry
-
-    # If no common entry found, collect all TS files from relevant folders
-    if not entry_files:
-        for folder_pattern in relevant_folders:
-            matches = glob.glob(os.path.join(repo_path, folder_pattern))
-            for match in matches:
-                if os.path.isfile(match) and match.endswith(TS_PRIMARY_EXTENSIONS):
-                    rel_path = os.path.relpath(match, repo_path)
-                    entry_files.append(rel_path)
+    # Collect ALL .ts files from relevant folders for whole-program analysis.
+    # Jelly with --ignore-dependencies needs all source files as input,
+    # not just barrel entry points (which are just re-exports).
+    for folder_pattern in relevant_folders:
+        matches = glob.glob(os.path.join(repo_path, folder_pattern))
+        for match in matches:
+            if os.path.isfile(match) and match.endswith(TS_PRIMARY_EXTENSIONS):
+                rel_path = os.path.relpath(match, repo_path)
+                entry_files.append(rel_path)
 
     return entry_files
 
@@ -390,13 +380,17 @@ def convert_jelly_to_adj(jelly_json: dict, repo_path: str) -> Dict[str, List[str
     """
     adj_list: Dict[str, Set[str]] = {}
 
-    # --- Format A: Jelly produces {"functions": {...}, "calls": [...]} ---
-    # This is the most common format from `jelly -j output.json`
+    # --- Format A: Jelly v0.12+ produces {files, functions, fun2fun, call2fun, calls} ---
+    # functions values are "fileIdx:startLine:startCol:endLine:endCol" strings
+    # fun2fun is [[sourceId, targetId], ...] for function-to-function edges
+    if "files" in jelly_json and "functions" in jelly_json and "fun2fun" in jelly_json:
+        return _parse_jelly_v012_format(jelly_json, repo_path)
+
+    # --- Format B: Legacy — functions as dicts with name/file/loc ---
     if "functions" in jelly_json and "calls" in jelly_json:
         return _parse_jelly_format_functions_calls(jelly_json, repo_path)
 
-    # --- Format B: Jelly produces {"fun2fun": [[src, tgt], ...], "call2fun": [...]} ---
-    # Some versions use this adjacency-pair format
+    # --- Format C: Standalone fun2fun format ---
     if "fun2fun" in jelly_json:
         return _parse_jelly_format_fun2fun(jelly_json, repo_path)
 
@@ -430,6 +424,112 @@ def _make_function_key(file_path: str, func_name: str, repo_path: str = "") -> s
     if file_path.startswith("./"):
         file_path = file_path[2:]
     return f"{file_path}::{func_name}"
+
+
+def _extract_func_name_at_line(file_path: str, line_num: int) -> Optional[str]:
+    """
+    Read a source file and extract the function/class/method name at the given line.
+    Returns None if no recognizable declaration is found.
+    """
+    try:
+        with open(file_path, "r", errors="replace") as f:
+            lines = f.readlines()
+        if line_num < 1 or line_num > len(lines):
+            return None
+        line = lines[line_num - 1].strip()
+
+        # Try patterns from most specific to least
+        patterns = [
+            r"(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)",  # function foo(
+            r"(?:export\s+)?(?:abstract\s+)?class\s+(\w+)",                  # class Foo
+            r"(?:export\s+)?namespace\s+(\w+)",                               # namespace Foo
+            r"(?:export\s+)?(?:abstract\s+)?interface\s+(\w+)",               # interface Foo
+            r"(?:export\s+)?type\s+(\w+)",                                    # type Foo
+            r"(?:export\s+)?enum\s+(\w+)",                                    # enum Foo
+            r"(?:export\s+)?(?:const|let|var)\s+(\w+)",                        # const foo (with optional type annotation)
+            r"(?:static\s+)?(?:async\s+)?(?:get|set)\s+(\w+)\s*\(",         # get foo( / set foo(
+            r"(?:static\s+)?(?:async\s+)?(\w+)\s*\(",                        # method( or foo(
+        ]
+        for pattern in patterns:
+            m = re.match(pattern, line)
+            if m:
+                name = m.group(1)
+                # Skip common false positives
+                if name in ("if", "for", "while", "switch", "return", "import", "export", "from", "new", "throw", "catch", "else"):
+                    continue
+                return name
+        return None
+    except (OSError, IOError):
+        return None
+
+
+def _parse_jelly_v012_format(
+    jelly_json: dict, repo_path: str
+) -> Dict[str, List[str]]:
+    """
+    Parse Jelly v0.12+ output format.
+
+    Actual structure:
+    {
+      "files": ["src/errors.ts", "src/types.ts", ...],
+      "functions": {"0": "fileIdx:startLine:startCol:endLine:endCol", ...},
+      "fun2fun": [[sourceId, targetId], ...],
+      "call2fun": [[callId, funcId], ...],
+      "calls": {"0": "fileIdx:startLine:startCol:endLine:endCol", ...}
+    }
+    """
+    files = jelly_json["files"]
+    functions = jelly_json["functions"]
+    fun2fun = jelly_json["fun2fun"]
+
+    # Build function ID -> key mapping
+    id_to_key: Dict[str, str] = {}
+    adj_list: Dict[str, Set[str]] = {}
+
+    for func_id_str, loc_str in functions.items():
+        func_id = int(func_id_str)
+        # Parse "fileIdx:startLine:startCol:endLine:endCol"
+        parts = loc_str.split(":")
+        if len(parts) < 5:
+            continue
+        file_idx = int(parts[0])
+        start_line = int(parts[1])
+
+        if file_idx < 0 or file_idx >= len(files):
+            continue
+
+        file_path = files[file_idx]
+
+        # Skip excluded directories and test files
+        if _is_excluded_dir(file_path):
+            continue
+        if _is_test_file(file_path):
+            continue
+
+        # Extract real function name from source, fall back to line number
+        func_name = _extract_func_name_at_line(file_path, start_line)
+        if not func_name:
+            func_name = f"func_at_L{start_line}"
+        key = _make_function_key(file_path, func_name, repo_path)
+        id_to_key[func_id] = key
+        if key not in adj_list:
+            adj_list[key] = set()
+
+    # Process fun2fun call edges
+    for edge in fun2fun:
+        if len(edge) < 2:
+            continue
+        source_id = edge[0]
+        target_id = edge[1]
+
+        if source_id in id_to_key and target_id in id_to_key:
+            source_key = id_to_key[source_id]
+            target_key = id_to_key[target_id]
+            if source_key != target_key:  # skip self-calls
+                adj_list[source_key].add(target_key)
+
+    # Convert sets to lists
+    return {k: list(v) for k, v in adj_list.items()}
 
 
 def _parse_jelly_format_functions_calls(
@@ -708,6 +808,7 @@ def _get_adj_list_jelly(repo_path: str,
         )
         return None
 
+    repo_path = os.path.abspath(repo_path)
     cwd = os.getcwd()
     try:
         os.chdir(repo_path)
@@ -769,6 +870,7 @@ def _get_adj_list_code2flow(repo_path: str,
     This is the original implementation preserved for backward compatibility
     with Python repository analysis.
     """
+    repo_path = os.path.abspath(repo_path)
     cwd = os.getcwd()
     try:
         os.chdir(repo_path)

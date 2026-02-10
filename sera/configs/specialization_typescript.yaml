@@ -36,18 +36,8 @@ generate:
       tsc_verify: true
       top_level_folder:
         - src
-    - org_name: vuejs
-      last_name: core
-      language: typescript
-      install_cmds:
-        - "pnpm install --frozen-lockfile"
-      test_cmd: "pnpm test"
-      node_version: "20"
-      package_manager: pnpm
-      test_framework: vitest
-      tsc_verify: true
-      top_level_folder:
-        - packages
+    # vuejs/core removed — monorepo OOM's Jelly at 4GB heap
+    # TODO: replace with valibot or ts-pattern
 
 distill:
   model:
