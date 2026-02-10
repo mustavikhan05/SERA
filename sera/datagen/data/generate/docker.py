@@ -103,7 +103,9 @@ class TypeScriptProfile(JavaScriptProfile):
     def dockerfile(self) -> str:
         """Generate Dockerfile for TypeScript repos."""
         return f"""FROM node:20-bullseye
-RUN apt update && apt install -y git build-essential python3
+RUN apt update && apt install -y git build-essential python3 python3-pip
+RUN python3 -m pip install pipx && python3 -m pipx ensurepath && pipx install swe-rex
+ENV PATH="$PATH:/root/.local/bin"
 RUN npm install -g pnpm@9
 RUN git clone https://github.com/{self.mirror_name} /testbed
 WORKDIR /testbed
