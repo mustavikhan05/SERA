@@ -51,22 +51,32 @@ class PersonalRepoConfig:
     n_commits: int = 5
     # How many days to look back for `n_commits`
     lookback: int = 365
-    # Repository language. Right now only Python supported
+    # Repository language: "python" or "typescript"
     language: str = "python"
     """Container setup"""
-    # Installation commands for repository
+    # Installation commands for repository.
+    # For Python: ["python -m pip install -e ."]
+    # For TypeScript: ["pnpm install"] or ["npm install"] or ["yarn install"]
     install_cmds: list[str] = field(default_factory=lambda: ["python -m pip install -e ."])
     # Commands to test repository installation, e.g. run test scripts
     test_cmd: Optional[str] = None
-    # Python version to install into container
+    # Python version to install into container (used when language="python")
     python_version: str = "3.10"
+    # Node.js version to install into container (used when language="typescript")
+    node_version: str = "20"
+    # Package manager for TypeScript repos: "pnpm", "npm", or "yarn"
+    package_manager: str = "pnpm"
+    # Test framework for TypeScript repos: "vitest", "jest", or "mocha"
+    test_framework: str = "vitest"
+    # Whether to run `tsc --noEmit` to verify types compile (TypeScript only)
+    tsc_verify: bool = True
     # Skip installing these packages into container, sidesteps rare dependency errors
     skip_package_name: List[str] = field(default_factory=list)
     """Codebase function parsing"""
     # Top level code folder to search under (e.g. src), will be automatically found if not specified
     top_level_folder: List[str] = field(default_factory=list)
     # Creating codebase graphs takes a few minutes so we cache the created graph. Set to True to turn off caching.
-    overwrite_cg: bool = False 
+    overwrite_cg: bool = False
     # How deep to parse into the codebase from `top_level_folder`. Higher number = more functions extracted.
     max_folder_depth: int = 3
 
