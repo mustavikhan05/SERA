@@ -122,6 +122,26 @@ class NoBugDataset(SyntheticDataset):
             new_instances.append(synthetic_instance)
         return new_instances        
 
+    @staticmethod
+    def _is_test_file(fn_path: str) -> bool:
+        """
+        Check if a function path belongs to a test file.
+        Handles both Python and TypeScript test conventions:
+        - Python: tests/, test_*.py, *_test.py
+        - TypeScript: __tests__/, .test.ts, .test.tsx, .spec.ts, .spec.tsx,
+                      e2e/, *.stories.ts, *.stories.tsx
+        """
+        test_indicators = [
+            "tests",       # Python: tests/ directory
+            "__tests__",   # TypeScript: Jest convention
+            ".test.",      # TypeScript: *.test.ts, *.test.tsx
+            ".spec.",      # TypeScript: *.spec.ts, *.spec.tsx
+            "/test/",      # Common: test/ directory
+            "/e2e/",       # TypeScript: e2e test directory
+            ".stories.",   # TypeScript: Storybook stories
+        ]
+        return any(indicator in fn_path for indicator in test_indicators)
+
     def process_repo(self, repo: RepositoryInstance):
         repo_instances = []
         n_fn_processed = 0
@@ -129,7 +149,7 @@ class NoBugDataset(SyntheticDataset):
         random.shuffle(call_graph_nodes)
         print("Total Functions:", len(call_graph_nodes))
         for fn_path in tqdm(call_graph_nodes, desc=repo.get_full_name()):
-            if "tests" in fn_path:
+            if self._is_test_file(fn_path):
                 continue
             result = self.process_instance(fn_path=fn_path,
                                            replicas=self.insts_per_fn,
