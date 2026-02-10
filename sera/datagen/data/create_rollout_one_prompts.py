@@ -1,5 +1,5 @@
 """
-Code for generating vague PR issues for rollout one.
+Code for generating vague PR issues for rollout one (TypeScript adaptation).
 Messy code but providing for reproduction and transparency.
 
 Usage:
@@ -15,8 +15,44 @@ from jinja2 import Template
 from sera.utils import pp_query, pp_regex
 
 PROMPT = """
-I want a set of prompts that will tell an AI agent to improve, optimize, and fix bugs in a codebase.
+I want a set of prompts that will tell an AI agent to improve, optimize, and fix bugs in a TypeScript codebase.
 These prompts should be general. Some possible directions are:
+
+TypeScript type system bugs:
+- Incorrect generic constraints (extends too narrow or too wide)
+- Missing null/undefined checks (strictNullChecks violations)
+- Wrong union type narrowing (type guard errors)
+- Incorrect type assertions (as casting hiding real errors)
+- Missing discriminated union cases
+- Wrong conditional type resolution
+- Incorrect mapped type transformations
+- `any` type escape bypassing type safety
+
+Async/runtime bugs:
+- Missing `await` on async function calls
+- Unhandled promise rejections
+- Race conditions in concurrent operations
+- Wrong error handling in try/catch (catching too broadly)
+- Incorrect `this` binding in callbacks
+- Wrong closure variable capture in loops
+
+Module/import bugs:
+- Circular dependencies causing undefined at runtime
+- Wrong re-exports (named vs default confusion)
+- Missing peer dependency types
+- Wrong module resolution (ESM vs CJS mismatch)
+
+Logic bugs:
+- Off-by-one errors
+- Wrong comparison operators
+- Wrong variable references
+- Missing return statements
+- Wrong conditional logic (&&/|| confusion)
+- Missing break in switch/case
+- Wrong array method usage (map vs forEach side effects)
+- Incorrect template literal interpolation
+
+General bugs:
 - Inconsistent method signatures
 - Shared function behavior drift
 - Mutated shared state
@@ -29,28 +65,19 @@ These prompts should be general. Some possible directions are:
 - Unhandled enum/schema updates
 - Async/sync mismatches
 - Concurrent shared-resource modification
-- Incorrect variable assignment
 - Missing validation checks
 - Incomplete functionality
 - API interaction mismatch
 - Faulty logic flow
 - Inefficient performance
 - Security vulnerability
-- UI state misuse
-- Misconfigured settings
-- Distributed interaction failure
 - Resource leakage
 - Concurrency race conditions
 - Data inconsistency
-- Browser incompatibility
-- Visual layout issues
-- Real-time timing errors
-- Resource overuse
-- Hardware access mistake
 After exhausting these, you can also come up with your own. This is a list of prompts so far:
 {{prompts}}
-Write one more short prompt that encourages a fix in a new, broad direction. The direction should generalize to any codebase, so avoid niche topics. The prompt should also specify that the fix could be in the start function OR a function related to it.
-Only change whats in <pr_description> in the previous prompts. Assume the exact same jinja inputs. Write your answer in <output> tags. 
+Write one more short prompt that encourages a fix in a new, broad direction. The direction should generalize to any TypeScript codebase, so avoid niche topics. The prompt should also specify that the fix could be in the start function OR a function related to it.
+Only change whats in <pr_description> in the previous prompts. Assume the exact same jinja inputs. Write your answer in <output> tags.
 """
 
 def call(prompts,):
@@ -68,7 +95,7 @@ def main():
     <uploaded_files>
     {{working_dir}}
     </uploaded_files>
-    I've uploaded a python code repository in the directory {{working_dir}}. Consider the following PR description:
+    I've uploaded a TypeScript code repository in the directory {{working_dir}}. Consider the following PR description:
 
     <pr_description>
     Possible bug in the library related to {{start_fn}} in {{start_fn_file}}.
@@ -80,10 +107,11 @@ def main():
     Your task is to make the minimal changes to non-tests files in the {{working_dir}} directory to ensure the issues in <pr_description> are fixed.
     Follow these steps to resolve the issue:
     1. As a first step, it might be a good idea to find and read code relevant to the <pr_description>
-    2. Create a script to reproduce the error and execute it with `python <filename.py>` using the bash tool, to confirm the error
+    2. Create a script to reproduce the error and execute it with `npx tsx <filename.ts>` using the bash tool, to confirm the error
     3. Edit the sourcecode of the repo to resolve the issue
     4. Rerun your reproduce script and confirm that the error is fixed!
     5. Think about edgecases and make sure your fix handles them as well
+    6. Run `npx tsc --noEmit` to verify no type errors were introduced
     Your thinking should be thorough and so it's fine if it's very long.
     """
     initial_issue_prompts = [
