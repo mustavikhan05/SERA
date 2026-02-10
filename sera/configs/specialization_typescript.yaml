@@ -43,8 +43,6 @@ distill:
   model:
     name: openai/kimi-k2.5
     url: https://api.moonshot.ai/v1
-  args:
-    agent.model.api_key: sk-kBgfy2mxyW4wdJmqJRnk4n7K2naLd8SOd9oVGTbNISX8cY8J
   sweagent_wrapper_config:
     num_workers: 8
 
