@@ -1197,6 +1197,25 @@ SWESMITH_IMAGES = {
     }
 }
 
+# TypeScript repository images for SERA-TS pipeline
+# Format: "org/repo" -> {"image_name": ..., "base_commit": ...}
+# Populated as TypeScript repos are containerized
+TS_REPO_IMAGES = {
+    # Pilot repos (to be populated with actual image names after containerization):
+    # "colinhacks/zod": {
+    #     "image_name": "sera-ts/zod:latest",
+    #     "base_commit": "<commit_hash>"
+    # },
+    # "honojs/hono": {
+    #     "image_name": "sera-ts/hono:latest",
+    #     "base_commit": "<commit_hash>"
+    # },
+    # "vuejs/core": {
+    #     "image_name": "sera-ts/vue-core:latest",
+    #     "base_commit": "<commit_hash>"
+    # },
+}
+
 SWEBENCH_IMAGES = {
     "astropy__astropy-12907": {
         "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
