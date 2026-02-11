@@ -41,8 +41,9 @@ generate:
 
 distill:
   model:
-    name: openai/kimi-k2.5
-    url: https://api.moonshot.ai/v1
+    name: openai/glm-4.5-air
+    url: https://api.z.ai/api/coding/paas/v4/
+  args: {}
   sweagent_wrapper_config:
     num_workers: 8
 

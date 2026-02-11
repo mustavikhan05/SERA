@@ -584,7 +584,7 @@ class RunBatch:
                                                             prompt=CHECK_SYNTHETIC_TRAJ_PROMPT,
                                                             model=self.agent_config.model.name,
                                                             base_url=self.agent_config.model.api_base,
-                                                            api_key=self.agent_config.model.api_key, args={"agent_steps": json.dumps(agent_trajectory[steps_truncation:]),
+                                                            api_key=self.agent_config.model.choose_api_key(), args={"agent_steps": json.dumps(agent_trajectory[steps_truncation:]),
                                                                                                             "initial_prompt": result.agent_history[1]["content"]}).lower()
                     except openai.BadRequestError as e:
                         print(f"Retrying: {e}")
